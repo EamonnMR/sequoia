@@ -1,11 +1,11 @@
 import std/strutils
 import std/rdstdin
 
-proc parse(input: string): string =
+proc parse(input: string): seq[string] =
   input.multiReplace(@[
     ("(", " ( "),
     (")", " ) "),
-  ])
+  ]).split_whitespace()
 
 var line: string
 echo "Sequoia"
