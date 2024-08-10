@@ -1,5 +1,6 @@
 import std/strutils
 import std/sequtils
+import std/parseutils
 import std/rdstdin
 import std/sugar
 
@@ -43,9 +44,9 @@ proc print(node: Node, indent: int): string =
   var whitespace: string = "\n" & (" ".repeat(indent))
   case node.node_type:
     of Int:
-      return whitespace & $(node.i)
+      return whitespace & "int: " & $(node.i)
     of String:
-      return whitespace & node.text
+      return whitespace & "string: " & node.text
     of List:
       var list_text: string = node.list.map(x => print(x, indent + 1) ).join(" ")
       return whitespace & "(" & list_text & whitespace & ")"
@@ -65,7 +66,11 @@ proc parse(tokens: TokenBuffer): Node =
       nodes.add( parse( tokens ) )
 
     return Node(node_type: NodeType.List, list: nodes)
-
+  
+  try:
+    return Node(node_type: NodeType.Int, i: token.parseInt() )
+  except:
+    discard
   return Node(node_type: NodeType.String, text: token )
 
 var line: string
