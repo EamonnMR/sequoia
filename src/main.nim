@@ -3,6 +3,7 @@ import std/sequtils
 import std/parseutils
 import std/rdstdin
 import std/sugar
+import std/tables
 
 type
   NodeType* = enum Int, String, List
@@ -15,6 +16,10 @@ type
       text*: string
     of List:
       list: seq[Node]
+
+  Env* = ref object
+    scope: TableRef[string, Node]
+    parent: Env
 
   TokenBuffer = ref object
     position: int
@@ -33,6 +38,12 @@ proc lookAheadNextToken(buffer: TokenBuffer): string =
 proc getNextToken(buffer: TokenBuffer): string =
   result = buffer.lookAheadNextToken()
   buffer.position += 1
+
+proc createBaseEnv(): Env =
+  Env(scope: newTable[string, Node](), parent: nil)
+
+proc createEnv(parent: Env): Env =
+  Env(scope: newTable[string, Node](), parent: parent)
 
 proc tokenize(input: string): seq[string] =
   input.multiReplace(@[
@@ -73,11 +84,16 @@ proc parse(tokens: TokenBuffer): Node =
     discard
   return Node(node_type: NodeType.String, text: token )
 
+proc eval(root: Node, env: Env): Node =
+  return root
+
+
 var line: string
 echo "Sequoia"
 while true:
   let ok = readLineFromStdin(">>> ", line)
   if not ok: break # ctrl-C or ctrl-D will cause a break
-  if line.len > 0: echo parse(lex(line))
+  let env: Env = createBaseEnv()
+  if line.len > 0: echo eval(parse(lex(line)), env)
 echo "exiting"
 
