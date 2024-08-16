@@ -16,6 +16,8 @@ type
       text*: string
     of List:
       list: seq[Node]
+    of Builtin:
+      function: proc(seq[Node]): Node
 
   Env* = ref object
     scope: TableRef[string, Node]
@@ -24,6 +26,25 @@ type
   TokenBuffer = ref object
     position: int
     buffer: seq[string]
+
+proc expectInt(node: Node): int:
+  if node.node_type == Int:
+    return node.i
+  else:
+    echo("Expected Int node, got" & Node.$)
+    return 0
+
+let baseScope: TableRef[string, Node] = newTable[string, Node]()
+
+template builtinProc(name: string, procedure: untyped):
+  proc name(argv: seq[Node]): Node:
+    procedure
+
+  baseScope[name] = Node(type=BuiltIn, function=name)
+
+builtinProc `+`:
+  argv {.inject.}: seq[Node]
+  return Node(node_type: Int, i: argv[0].expectInt() + argv[1].expectInt()
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
@@ -40,7 +61,7 @@ proc getNextToken(buffer: TokenBuffer): string =
   buffer.position += 1
 
 proc createBaseEnv(): Env =
-  Env(scope: newTable[string, Node](), parent: nil)
+  Env(scope: baseScope, parent: nil)
 
 proc createEnv(parent: Env): Env =
   Env(scope: newTable[string, Node](), parent: parent)
@@ -61,6 +82,8 @@ proc print(node: Node, indent: int): string =
     of List:
       var list_text: string = node.list.map(x => print(x, indent + 1) ).join(" ")
       return whitespace & "(" & list_text & whitespace & ")"
+    of Builtin:
+      return whitespace & node.function.$
 
 proc `$`* (node: Node): string = print(node, 0)
 
@@ -85,7 +108,30 @@ proc parse(tokens: TokenBuffer): Node =
   return Node(node_type: NodeType.String, text: token )
 
 proc eval(root: Node, env: Env): Node =
-  return root
+  case root.node_type:
+    of Int:
+      return root
+    of String:
+      return env.get(node.str)
+    of Builtin:
+      return root
+    of List:
+      let fname = root.list[0]
+      # TODO: Special Forms
+      let functionNode = env.get(node.str)
+      case functionNode.node_type:
+        # TODO: Yell at user - ints and strings arent callable
+        of Int:
+          return root
+        of String:
+          return root
+
+        of List:
+          # TODO: Apply
+          return root
+
+        of Builtin:
+          return functionNode.function(root.list)
 
 
 var line: string
