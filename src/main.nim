@@ -4,9 +4,10 @@ import std/parseutils
 import std/rdstdin
 import std/sugar
 import std/tables
+import std/macros
 
 type
-  NodeType* = enum Int, String, List
+  NodeType* = enum Int, String, List, Builtin
   
   Node* = ref object
     case node_type*: NodeType:
@@ -17,7 +18,7 @@ type
     of List:
       list: seq[Node]
     of Builtin:
-      function: proc(seq[Node]): Node
+      function: proc(args:seq[Node]):Node
 
   Env* = ref object
     scope: TableRef[string, Node]
@@ -27,24 +28,33 @@ type
     position: int
     buffer: seq[string]
 
-proc expectInt(node: Node): int:
+proc expectInt(node: Node): int=
   if node.node_type == Int:
     return node.i
   else:
-    echo("Expected Int node, got" & Node.$)
+    # echo("Expected Int node, got" & node.$)
     return 0
 
 let baseScope: TableRef[string, Node] = newTable[string, Node]()
 
-template builtinProc(name: string, procedure: untyped):
-  proc name(argv: seq[Node]): Node:
-    procedure
+#template builtinProc(name: string, procedure: untyped): untyped =
+  #proc name(argv: seq[Node]): Node=
+  #  procedure
 
-  baseScope[name] = Node(type=BuiltIn, function=name)
+#  baseScope[name] = Node(node_type=BuiltIn, function=proc(argv: seq[Node]):Node=
+
+#    procedure
+#  )
+
+template builtinProc(name, body: untyped): untyped =
+  proc name(argv {.inject.}: seq[Node]): Node =
+    body
+
+  baseScope[astToStr(name).replace("`", "")] = Node(node_type: BuiltIn, function: name)
 
 builtinProc `+`:
-  argv {.inject.}: seq[Node]
-  return Node(node_type: Int, i: argv[0].expectInt() + argv[1].expectInt()
+  #argv {.inject.}: seq[Node]
+  Node(node_type: Int, i: argv[1].expectInt() + argv[2].expectInt())
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
@@ -66,6 +76,9 @@ proc createBaseEnv(): Env =
 proc createEnv(parent: Env): Env =
   Env(scope: newTable[string, Node](), parent: parent)
 
+proc `[]`(env: Env, str: string): Node =
+  env.scope[str]
+
 proc tokenize(input: string): seq[string] =
   input.multiReplace(@[
     ("(", " ( "),
@@ -83,7 +96,7 @@ proc print(node: Node, indent: int): string =
       var list_text: string = node.list.map(x => print(x, indent + 1) ).join(" ")
       return whitespace & "(" & list_text & whitespace & ")"
     of Builtin:
-      return whitespace & node.function.$
+      return whitespace & "<builtin function>"
 
 proc `$`* (node: Node): string = print(node, 0)
 
@@ -112,13 +125,13 @@ proc eval(root: Node, env: Env): Node =
     of Int:
       return root
     of String:
-      return env.get(node.str)
+      return env[root.text]
     of Builtin:
       return root
     of List:
       let fname = root.list[0]
       # TODO: Special Forms
-      let functionNode = env.get(node.str)
+      let functionNode: Node = env[fname.text]
       case functionNode.node_type:
         # TODO: Yell at user - ints and strings arent callable
         of Int:
