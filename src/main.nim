@@ -53,8 +53,7 @@ template builtinProc(name, body: untyped): untyped =
   baseScope[astToStr(name).replace("`", "")] = Node(node_type: BuiltIn, function: name)
 
 builtinProc `+`:
-  #argv {.inject.}: seq[Node]
-  Node(node_type: Int, i: argv[1].expectInt() + argv[2].expectInt())
+  Node(node_type: Int, i: argv[0].expectInt() + argv[1].expectInt())
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
@@ -144,7 +143,7 @@ proc eval(root: Node, env: Env): Node =
           return root
 
         of Builtin:
-          return functionNode.function(root.list)
+          return functionNode.function(root.list[1 .. ^1])
 
 
 var line: string
