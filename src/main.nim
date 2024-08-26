@@ -28,31 +28,47 @@ type
     position: int
     buffer: seq[string]
 
+proc print(node: Node, indent: int): string =
+  var whitespace: string = "\n" & (" ".repeat(indent))
+  case node.node_type:
+    of Int:
+      return whitespace & "int: " & $(node.i)
+    of String:
+      return whitespace & "string: " & node.text
+    of List:
+      var list_text: string = node.list.map(x => print(x, indent + 1) ).join(" ")
+      return whitespace & "(" & list_text & whitespace & ")"
+    of Builtin:
+      return whitespace & "<builtin function>"
+
+proc `$`* (node: Node): string = print(node, 0)
+
+
+
 proc expectInt(node: Node): int=
   if node.node_type == Int:
     return node.i
   else:
-    # echo("Expected Int node, got" & node.$)
+    echo "Expected Int node, got: " & $(node)
     return 0
 
 let baseScope: TableRef[string, Node] = newTable[string, Node]()
 
-#template builtinProc(name: string, procedure: untyped): untyped =
-  #proc name(argv: seq[Node]): Node=
-  #  procedure
-
-#  baseScope[name] = Node(node_type=BuiltIn, function=proc(argv: seq[Node]):Node=
-
-#    procedure
-#  )
-
-template builtinProc(name, body: untyped): untyped =
+template builtinProc(name: untyped, body: untyped): untyped =
+  let nameStr: string = astToStr(name).replace("`", "")
   proc name(argv {.inject.}: seq[Node]): Node =
+    echo "Calling: " & nameStr
+    for node in argv:
+      echo "arg :" & $(node)
     body
 
-  baseScope[astToStr(name).replace("`", "")] = Node(node_type: BuiltIn, function: name)
+  baseScope[nameStr] = Node(node_type: BuiltIn, function: name)
 
 builtinProc `+`:
+  if len(argv) != 2:
+    echo "Expected 2  args, got" & $(len(argv))
+    return Node(node_type: Int, i: 0)
+
   Node(node_type: Int, i: argv[0].expectInt() + argv[1].expectInt())
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
@@ -83,21 +99,6 @@ proc tokenize(input: string): seq[string] =
     ("(", " ( "),
     (")", " ) "),
   ]).split_whitespace()
-
-proc print(node: Node, indent: int): string =
-  var whitespace: string = "\n" & (" ".repeat(indent))
-  case node.node_type:
-    of Int:
-      return whitespace & "int: " & $(node.i)
-    of String:
-      return whitespace & "string: " & node.text
-    of List:
-      var list_text: string = node.list.map(x => print(x, indent + 1) ).join(" ")
-      return whitespace & "(" & list_text & whitespace & ")"
-    of Builtin:
-      return whitespace & "<builtin function>"
-
-proc `$`* (node: Node): string = print(node, 0)
 
 proc lex(input: string): TokenBuffer =
   return createTokenBuffer( tokenize( input ) )
@@ -143,7 +144,9 @@ proc eval(root: Node, env: Env): Node =
           return root
 
         of Builtin:
-          return functionNode.function(root.list[1 .. ^1])
+          return functionNode.function(
+            root.list[1 .. ^1].map( arg => eval(arg, env) )
+          )
 
 
 var line: string
