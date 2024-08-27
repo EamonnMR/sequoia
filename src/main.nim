@@ -43,8 +43,6 @@ proc print(node: Node, indent: int): string =
 
 proc `$`* (node: Node): string = print(node, 0)
 
-
-
 proc expectInt(node: Node): int=
   if node.node_type == Int:
     return node.i
@@ -92,7 +90,10 @@ proc createEnv(parent: Env): Env =
   Env(scope: newTable[string, Node](), parent: parent)
 
 proc `[]`(env: Env, str: string): Node =
-  env.scope[str]
+  if str in env.scope:
+    echo "Undefined: " & str
+    return env.scope[str]
+  return Node(node_type: Int, i: 0)
 
 proc tokenize(input: string): seq[string] =
   input.multiReplace(@[
