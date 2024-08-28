@@ -5,6 +5,11 @@ import std/rdstdin
 import std/sugar
 import std/tables
 import std/macros
+import std/envvars
+
+proc puts(str: string) =
+  if getEnv("mode") == "debug":
+    puts str
 
 type
   NodeType* = enum Int, String, List, Builtin
@@ -47,7 +52,7 @@ proc expectInt(node: Node): int=
   if node.node_type == Int:
     return node.i
   else:
-    echo "Expected Int node, got: " & $(node)
+    puts "Expected Int node, got: " & $(node)
     return 0
 
 let baseScope: TableRef[string, Node] = newTable[string, Node]()
@@ -55,18 +60,18 @@ let baseScope: TableRef[string, Node] = newTable[string, Node]()
 template builtinProc(name: untyped, body: untyped): untyped =
   let nameStr: string = astToStr(name).replace("`", "")
   proc name(argv {.inject.}: seq[Node]): Node =
-    echo "Calling: " & nameStr
+    puts "Calling: " & nameStr
     for node in argv:
-      echo "arg :" & $(node)
+      puts "arg :" & $(node)
+    if len(argv) != 2:
+      puts "Expected 2  args, got: " & $(len(argv))
+      return Node(node_type: Int, i: 0)
+
     body
 
   baseScope[nameStr] = Node(node_type: BuiltIn, function: name)
 
 builtinProc `+`:
-  if len(argv) != 2:
-    echo "Expected 2  args, got" & $(len(argv))
-    return Node(node_type: Int, i: 0)
-
   Node(node_type: Int, i: argv[0].expectInt() + argv[1].expectInt())
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
@@ -91,7 +96,7 @@ proc createEnv(parent: Env): Env =
 
 proc `[]`(env: Env, str: string): Node =
   if str in env.scope:
-    echo "Undefined: " & str
+    puts "Undefined: " & str
     return env.scope[str]
   return Node(node_type: Int, i: 0)
 
