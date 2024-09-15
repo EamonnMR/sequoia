@@ -55,24 +55,41 @@ proc expectInt(node: Node): int=
     puts "Expected Int node, got: " & $(node)
     return 0
 
+proc expectString(node: Node): string=
+  if node.node_type == String:
+    return node.text
+  else:
+    puts "Expected Int node, got: " & $(node)
+    return ""
+
 let baseScope: TableRef[string, Node] = newTable[string, Node]()
 
-template builtinProc(name: untyped, body: untyped): untyped =
+template builtinProc(name: untyped, expected_args: int, body: untyped): untyped =
   let nameStr: string = astToStr(name).replace("`", "")
   proc name(argv {.inject.}: seq[Node]): Node =
     puts "Calling: " & nameStr
     for node in argv:
       puts "arg :" & $(node)
-    if len(argv) != 2:
-      puts "Expected 2  args, got: " & $(len(argv))
+    if expected_args > 0 and len(argv) != expected_args:
+      puts "Expected "& $(expected_args) & " args, got: " & $(len(argv))
       return Node(node_type: Int, i: 0)
 
     body
 
   baseScope[nameStr] = Node(node_type: BuiltIn, function: name)
 
-builtinProc `+`:
+builtinProc `+`, 2:
   Node(node_type: Int, i: argv[0].expectInt() + argv[1].expectInt())
+
+builtinProc begin, 0:
+  for arg in argv:
+    echo($(arg))
+  return argv[^1]
+
+builtinProc display, 1:
+  puts($(argv[0]))
+  return argv[0]
+
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
@@ -94,11 +111,14 @@ proc createBaseEnv(): Env =
 proc createEnv(parent: Env): Env =
   Env(scope: newTable[string, Node](), parent: parent)
 
-proc `[]`(env: Env, str: string): Node =
-  if str in env.scope:
-    puts "Undefined: " & str
-    return env.scope[str]
+proc `[]`(env: Env, key: string): Node =
+  if key in env.scope:
+    puts "Undefined: " & key
+    return env.scope[key]
   return Node(node_type: Int, i: 0)
+
+proc `[]=`(env: Env, key: string, value: Node)=
+  env.scope[key] = value
 
 proc tokenize(input: string): seq[string] =
   input.multiReplace(@[
@@ -135,21 +155,24 @@ proc eval(root: Node, env: Env): Node =
     of Builtin:
       return root
     of List:
-      let fname = root.list[0]
-      # TODO: Special Forms
-      let functionNode: Node = env[fname.text]
+      let fname = root.list[0].expectString()
+      
+      if fname == "define":
+        env[root.list[1].expectString()] = eval(root.list[2], env)
+      let functionNode: Node = env[fname]
+      echo(fname)
       case functionNode.node_type:
         # TODO: Yell at user - ints and strings arent callable
         of Int:
           return root
         of String:
           return root
-
         of List:
           # TODO: Apply
           return root
 
         of Builtin:
+          echo("Builtin call")
           return functionNode.function(
             root.list[1 .. ^1].map( arg => eval(arg, env) )
           )
