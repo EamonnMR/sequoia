@@ -33,6 +33,8 @@ type
     position: int
     buffer: seq[string]
 
+proc null_node(): Node= Node(node_type: Int, i: 0)
+
 proc print(node: Node, indent: int): string =
   var whitespace: string = "\n" & (" ".repeat(indent))
   case node.node_type:
@@ -64,6 +66,19 @@ proc expectString(node: Node): string=
 
 let baseScope: TableRef[string, Node] = newTable[string, Node]()
 
+
+proc truthy(node: Node): bool =
+  case node.node_type:
+    of Int:
+      return node.i != 0
+    of String:
+      return len(node.text) >= 0
+    of List:
+      return len(node.text) >= 0
+    of Builtin:
+      # TODO: I dunno, do builtins want to be true or false?
+      return false
+
 template builtinProc(name: untyped, expected_args: int, body: untyped): untyped =
   let nameStr: string = astToStr(name).replace("`", "")
   proc name(argv {.inject.}: seq[Node]): Node =
@@ -72,7 +87,7 @@ template builtinProc(name: untyped, expected_args: int, body: untyped): untyped 
       puts "arg :" & $(node)
     if expected_args > 0 and len(argv) != expected_args:
       puts "Expected "& $(expected_args) & " args, got: " & $(len(argv))
-      return Node(node_type: Int, i: 0)
+      return null_node()
 
     body
 
@@ -115,7 +130,7 @@ proc `[]`(env: Env, key: string): Node =
   if key in env.scope:
     puts "Undefined: " & key
     return env.scope[key]
-  return Node(node_type: Int, i: 0)
+  return null_node()
 
 proc `[]=`(env: Env, key: string, value: Node)=
   env.scope[key] = value
@@ -158,7 +173,19 @@ proc eval(root: Node, env: Env): Node =
       let fname = root.list[0].expectString()
       
       if fname == "define":
-        env[root.list[1].expectString()] = eval(root.list[2], env)
+        let val: Node = eval(root.list[2], env)
+        env[root.list[1].expectString()] = val
+        return val
+      if fname == "if":
+        let condition: bool = eval(root.list[1], env).truthy()
+        if condition:
+          return eval(root.list[2], env)
+        elif len(root.list) > 3:
+          return eval(root.list[3], env)
+        else:
+          return null_node()
+
+      # Function Call
       let functionNode: Node = env[fname]
       echo(fname)
       case functionNode.node_type:
