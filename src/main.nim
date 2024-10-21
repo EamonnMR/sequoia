@@ -12,7 +12,7 @@ proc puts(str: string) =
     puts str
 
 type
-  NodeType* = enum Int, String, List, Builtin
+  NodeType* = enum Int, String, List, Proc, Builtin
   
   Node* = ref object
     case node_type*: NodeType:
@@ -22,6 +22,10 @@ type
       text*: string
     of List:
       list: seq[Node]
+    of Proc:
+      args: seq[Node]
+      body: seq[Node]
+      env: Env
     of Builtin:
       function: proc(args:seq[Node]):Node
 
@@ -105,6 +109,24 @@ builtinProc display, 1:
   puts($(argv[0]))
   return argv[0]
 
+builtinProc apply, 2:
+  var body: seq[Node], sig: seq[Node], scope: Env = argv[0].expectProc()
+  var params: seq[Node] = argv[1].expectList()
+
+  var expected_args: int = len(sig)
+  var got_args = len(params)
+  if expected_args != got_args:
+    puts "Expected "& $(expected_args) & " args, got: " & $(got_args)
+    return null_node()
+
+  var func_scope = createEnv(scope)
+
+  for arg_name, index in sig:
+    env[arg_name] = args[index]
+
+  return eval(body, func_scope)
+
+
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
@@ -161,6 +183,7 @@ proc parse(tokens: TokenBuffer): Node =
     discard
   return Node(node_type: NodeType.String, text: token )
 
+
 proc eval(root: Node, env: Env): Node =
   case root.node_type:
     of Int:
@@ -195,9 +218,7 @@ proc eval(root: Node, env: Env): Node =
         of String:
           return root
         of List:
-          # TODO: Apply
-          return root
-
+          return apply( functionNode.list[0], functionNode.list[1], env, root.list[1 .. ^1])
         of Builtin:
           echo("Builtin call")
           return functionNode.function(
