@@ -51,6 +51,9 @@ proc print(node: Node, indent: int): string =
       return whitespace & "(" & list_text & whitespace & ")"
     of Builtin:
       return whitespace & "<builtin function>"
+    of Proc:
+      var list_text: string = node.body.map(x => print(x, indent + 1) ).join(" ")
+      return whitespace & "Proc: (" & list_text & ")"
 
 proc `$`* (node: Node): string = print(node, 0)
 
@@ -68,6 +71,19 @@ proc expectString(node: Node): string=
     puts "Expected Int node, got: " & $(node)
     return ""
 
+proc expectProc(node: Node): (seq[Node], seq[Node], Env)=
+  if node.node_type == Proc:
+    return (node.args, node.body, node.env)
+  else:
+    return (@[], @[], Env(scope: newTable[string, Node](), parent: nil))
+
+
+proc expectList(node: Node): seq[Node]=
+  if node.node_type == List:
+    return node.list
+  else:
+    return @[]
+
 let baseScope: TableRef[string, Node] = newTable[string, Node]()
 
 
@@ -82,6 +98,25 @@ proc truthy(node: Node): bool =
     of Builtin:
       # TODO: I dunno, do builtins want to be true or false?
       return false
+    of Proc:
+      return true
+
+proc createBaseEnv(): Env =
+  Env(scope: baseScope, parent: nil)
+
+proc createEnv(parent: Env): Env =
+  Env(scope: newTable[string, Node](), parent: parent)
+
+proc `[]`(env: Env, key: string): Node =
+  if key in env.scope:
+    puts "Undefined: " & key
+    return env.scope[key]
+  return null_node()
+
+proc `[]=`(env: Env, key: string, value: Node)=
+  env.scope[key] = value
+
+proc eval(root: Node, env: Env): Node
 
 template builtinProc(name: untyped, expected_args: int, body: untyped): untyped =
   let nameStr: string = astToStr(name).replace("`", "")
@@ -110,7 +145,7 @@ builtinProc display, 1:
   return argv[0]
 
 builtinProc apply, 2:
-  var body: seq[Node], sig: seq[Node], scope: Env = argv[0].expectProc()
+  var (body, sig, env) = argv[0].expectProc()
   var params: seq[Node] = argv[1].expectList()
 
   var expected_args: int = len(sig)
@@ -119,14 +154,13 @@ builtinProc apply, 2:
     puts "Expected "& $(expected_args) & " args, got: " & $(got_args)
     return null_node()
 
-  var func_scope = createEnv(scope)
+  var func_scope = createEnv(env)
 
-  for arg_name, index in sig:
-    env[arg_name] = args[index]
+  for index, arg_name in sig:
+    func_scope[arg_name.text] = params[index]
 
-  return eval(body, func_scope)
-
-
+  let root = Node(node_type: List, list: body)
+  return eval(root, func_scope)
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
@@ -141,21 +175,6 @@ proc lookAheadNextToken(buffer: TokenBuffer): string =
 proc getNextToken(buffer: TokenBuffer): string =
   result = buffer.lookAheadNextToken()
   buffer.position += 1
-
-proc createBaseEnv(): Env =
-  Env(scope: baseScope, parent: nil)
-
-proc createEnv(parent: Env): Env =
-  Env(scope: newTable[string, Node](), parent: parent)
-
-proc `[]`(env: Env, key: string): Node =
-  if key in env.scope:
-    puts "Undefined: " & key
-    return env.scope[key]
-  return null_node()
-
-proc `[]=`(env: Env, key: string, value: Node)=
-  env.scope[key] = value
 
 proc tokenize(input: string): seq[string] =
   input.multiReplace(@[
