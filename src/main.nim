@@ -211,6 +211,8 @@ proc eval(root: Node, env: Env): Node =
       return env[root.text]
     of Builtin:
       return root
+    of Proc:
+      return root
     of List:
       let fname = root.list[0].expectString()
       
@@ -237,12 +239,17 @@ proc eval(root: Node, env: Env): Node =
         of String:
           return root
         of List:
-          return apply( functionNode.list[0], functionNode.list[1], env, root.list[1 .. ^1])
+          return apply( @[
+            functionNode,
+            Node(node_type: List, list: root.list[1 .. ^1] )
+          ])
         of Builtin:
           echo("Builtin call")
           return functionNode.function(
             root.list[1 .. ^1].map( arg => eval(arg, env) )
           )
+        of Proc:
+          return root
 
 
 var line: string
