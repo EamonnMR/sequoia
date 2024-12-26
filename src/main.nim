@@ -135,6 +135,17 @@ template builtinProc(name: untyped, expected_args: int, body: untyped): untyped 
 builtinProc `+`, 2:
   Node(node_type: Int, i: argv[0].expectInt() + argv[1].expectInt())
 
+builtinProc `-`, 2:
+  Node(node_type: Int, i: argv[0].expectInt() - argv[1].expectInt())
+
+builtinProc `*`, 2:
+  Node(node_type: Int, i: argv[0].expectInt() * argv[1].expectInt())
+
+
+# TODO: Add floats
+# builtinProc `/`, 2:
+#  Node(node_type: Int, i: argv[0].expectInt() / argv[1].expectInt())
+
 builtinProc begin, 0:
   for arg in argv:
     echo($(arg))
