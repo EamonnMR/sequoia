@@ -7,6 +7,10 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+
+      - name: Nim Install
+        uses: jiro4989/setup-nim-action@v1
+        
       - name: Build Project
         run: |
           make build
