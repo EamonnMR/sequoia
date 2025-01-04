@@ -6,6 +6,7 @@ import std/sugar
 import std/tables
 import std/macros
 import std/envvars
+import std/terminal
 
 proc puts(str: string) =
   if getEnv("mode") == "debug":
@@ -262,13 +263,22 @@ proc eval(root: Node, env: Env): Node =
         of Proc:
           return root
 
+proc repl() =
+  var line: string
+  echo "Sequoia"
+  while true:
+    let ok = readLineFromStdin(">>> ", line)
+    if not ok: break # ctrl-C or ctrl-D will cause a break
+    let env: Env = createBaseEnv()
+    if line.len > 0: echo eval(parse(lex(line)), env)
+  echo "exiting"
 
-var line: string
-echo "Sequoia"
-while true:
-  let ok = readLineFromStdin(">>> ", line)
-  if not ok: break # ctrl-C or ctrl-D will cause a break
+proc run() =
   let env: Env = createBaseEnv()
-  if line.len > 0: echo eval(parse(lex(line)), env)
-echo "exiting"
+  echo eval(parse(lex(readAll(stdin))), env)
+
+if isatty(stdin):
+  repl()
+else:
+  run()
 
