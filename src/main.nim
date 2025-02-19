@@ -240,6 +240,9 @@ proc eval(root: Node, env: Env): Node =
           return eval(root.list[3], env)
         else:
           return null_node()
+      if fname == "quote":
+        return root.list[1]
+
 
       # Function Call
       let functionNode: Node = env[fname]
@@ -251,6 +254,7 @@ proc eval(root: Node, env: Env): Node =
         of String:
           return root
         of List:
+          echo("Function Call")
           return apply( @[
             functionNode,
             Node(node_type: List, list: root.list[1 .. ^1] )
