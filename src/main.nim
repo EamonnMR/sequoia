@@ -10,7 +10,7 @@ import std/terminal
 
 proc puts(str: string) =
   if getEnv("mode") == "debug":
-    puts str
+    echo str
 
 type
   NodeType* = enum Int, String, List, Proc, Builtin
@@ -55,6 +55,11 @@ proc print(node: Node, indent: int): string =
     of Proc:
       var list_text: string = node.body.map(x => print(x, indent + 1) ).join(" ")
       return whitespace & "Proc: (" & list_text & ")"
+
+proc puts(node: Node) =
+  if getEnv("mode") == "debug":
+    echo( print( node, 0) )
+
 
 proc `$`* (node: Node): string = print(node, 0)
 
@@ -203,6 +208,7 @@ proc parse(tokens: TokenBuffer): Node =
     var nodes: seq[Node] = @[]
     while tokens.hasNextToken():
       if tokens.lookAheadNextToken() == ")":
+        discard tokens.getNextToken()
         break
       nodes.add( parse( tokens ) )
 
@@ -216,6 +222,7 @@ proc parse(tokens: TokenBuffer): Node =
 
 
 proc eval(root: Node, env: Env): Node =
+  puts(root)
   case root.node_type:
     of Int:
       return root
@@ -243,6 +250,15 @@ proc eval(root: Node, env: Env): Node =
       if fname == "quote":
         return root.list[1]
 
+      if fname == "lambda":
+        echo(len(root.list))
+        let args: seq[Node] = expectList( root.list[1] )
+        puts(root.list[0])
+        puts(root.list[1])
+        puts(root.list[2])
+        let body: seq[Node] = expectList( root.list[2] )
+        echo(len(root.list))
+        return Node(node_type: NodeType.Proc, args: args, body: body, env: env)
 
       # Function Call
       let functionNode: Node = env[fname]
