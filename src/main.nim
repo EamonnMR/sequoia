@@ -115,8 +115,14 @@ proc createEnv(parent: Env): Env =
 
 proc `[]`(env: Env, key: string): Node =
   if key in env.scope:
-    puts "Undefined: " & key
     return env.scope[key]
+  
+  if env.parent != nil:
+    return env.parent[key]
+  # puts "Undefined: " & key
+  # puts "defined keys:"
+  # for key in env.scope.keys():
+  #   puts(key & "\n")
   return null_node()
 
 proc `[]=`(env: Env, key: string, value: Node)=
@@ -131,7 +137,7 @@ template builtinProc(name: untyped, expected_args: int, body: untyped): untyped 
     for node in argv:
       puts "arg :" & $(node)
     if expected_args > 0 and len(argv) != expected_args:
-      puts "Expected "& $(expected_args) & " args, got: " & $(len(argv))
+      puts "Expected " & $(expected_args) & " args, got: " & $(len(argv))
       return null_node()
 
     body
@@ -162,7 +168,7 @@ builtinProc display, 1:
   return argv[0]
 
 builtinProc apply, 2:
-  var (body, sig, env) = argv[0].expectProc()
+  var (sig, body, env) = argv[0].expectProc()
   var params: seq[Node] = argv[1].expectList()
 
   var expected_args: int = len(sig)
@@ -222,6 +228,7 @@ proc parse(tokens: TokenBuffer): Node =
 
 
 proc eval(root: Node, env: Env): Node =
+  puts("Eval")
   puts(root)
   case root.node_type:
     of Int:
@@ -260,9 +267,11 @@ proc eval(root: Node, env: Env): Node =
         echo(len(root.list))
         return Node(node_type: NodeType.Proc, args: args, body: body, env: env)
 
-      # Function Call
+      puts("function call")
       let functionNode: Node = env[fname]
-      echo(fname)
+      puts(fname)
+      puts("function body")
+      puts(functionNode)
       case functionNode.node_type:
         # TODO: Yell at user - ints and strings arent callable
         of Int:
@@ -270,18 +279,18 @@ proc eval(root: Node, env: Env): Node =
         of String:
           return root
         of List:
-          echo("Function Call")
-          return apply( @[
-            functionNode,
-            Node(node_type: List, list: root.list[1 .. ^1] )
-          ])
+          return root
         of Builtin:
           echo("Builtin call")
           return functionNode.function(
             root.list[1 .. ^1].map( arg => eval(arg, env) )
           )
         of Proc:
-          return root
+          echo("Function Call")
+          return apply( @[
+            functionNode,
+            Node(node_type: List, list: root.list[1 .. ^1] )
+          ])
 
 proc repl() =
   var line: string
