@@ -96,6 +96,7 @@ let baseScope: TableRef[string, Node] = newTable[string, Node]()
 proc truthy(node: Node): bool =
   case node.node_type:
     of Int:
+      puts("is int truthy")
       return node.i != 0
     of String:
       return len(node.text) >= 0
@@ -106,6 +107,9 @@ proc truthy(node: Node): bool =
       return false
     of Proc:
       return true
+
+proc truthy_as_node(boolean: bool): Node =
+  return Node(node_type: Int, i: if boolean: 1 else: 0)
 
 proc createBaseEnv(): Env =
   Env(scope: baseScope, parent: nil)
@@ -155,8 +159,8 @@ builtinProc `*`, 2:
 
 
 # TODO: Add floats
-# builtinProc `/`, 2:
-#  Node(node_type: Int, i: argv[0].expectInt() / argv[1].expectInt())
+builtinProc `/`, 2:
+  Node(node_type: Int, i: int(argv[0].expectInt() / argv[1].expectInt()))
 
 builtinProc begin, 0:
   for arg in argv:
@@ -184,6 +188,25 @@ builtinProc apply, 2:
 
   let root = Node(node_type: List, list: body)
   return eval(root, func_scope)
+
+builtinProc `equal?`, 2:
+  return truthy_as_node(argv[0] == argv[1])
+
+
+builtinProc `assert`, 2:
+  if getEnv("mode") == "debug":
+    if not argv[0].truthy():
+      puts(argv[1])
+      quit(70)
+    else:
+      puts(argv[0])
+      puts("is truthy")
+
+
+  return null_node()
+
+builtinProc exit, 1:
+  quit(argv[0].expectInt())
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
