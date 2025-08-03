@@ -6,10 +6,11 @@ import std/sugar
 import std/tables
 import std/macros
 import std/envvars
+import std/terminal
 
 proc puts(str: string) =
   if getEnv("mode") == "debug":
-    puts str
+    echo str
 
 type
   NodeType* = enum Int, String, List, Proc, Builtin
@@ -55,6 +56,11 @@ proc print(node: Node, indent: int): string =
       var list_text: string = node.body.map(x => print(x, indent + 1) ).join(" ")
       return whitespace & "Proc: (" & list_text & ")"
 
+proc puts(node: Node) =
+  if getEnv("mode") == "debug":
+    echo( print( node, 0) )
+
+
 proc `$`* (node: Node): string = print(node, 0)
 
 proc expectInt(node: Node): int=
@@ -90,6 +96,7 @@ let baseScope: TableRef[string, Node] = newTable[string, Node]()
 proc truthy(node: Node): bool =
   case node.node_type:
     of Int:
+      puts("is int truthy")
       return node.i != 0
     of String:
       return len(node.text) >= 0
@@ -101,6 +108,9 @@ proc truthy(node: Node): bool =
     of Proc:
       return true
 
+proc truthy_as_node(boolean: bool): Node =
+  return Node(node_type: Int, i: if boolean: 1 else: 0)
+
 proc createBaseEnv(): Env =
   Env(scope: baseScope, parent: nil)
 
@@ -109,8 +119,14 @@ proc createEnv(parent: Env): Env =
 
 proc `[]`(env: Env, key: string): Node =
   if key in env.scope:
-    puts "Undefined: " & key
     return env.scope[key]
+  
+  if env.parent != nil:
+    return env.parent[key]
+  # puts "Undefined: " & key
+  # puts "defined keys:"
+  # for key in env.scope.keys():
+  #   puts(key & "\n")
   return null_node()
 
 proc `[]=`(env: Env, key: string, value: Node)=
@@ -125,7 +141,7 @@ template builtinProc(name: untyped, expected_args: int, body: untyped): untyped 
     for node in argv:
       puts "arg :" & $(node)
     if expected_args > 0 and len(argv) != expected_args:
-      puts "Expected "& $(expected_args) & " args, got: " & $(len(argv))
+      puts "Expected " & $(expected_args) & " args, got: " & $(len(argv))
       return null_node()
 
     body
@@ -143,8 +159,8 @@ builtinProc `*`, 2:
 
 
 # TODO: Add floats
-# builtinProc `/`, 2:
-#  Node(node_type: Int, i: argv[0].expectInt() / argv[1].expectInt())
+builtinProc `/`, 2:
+  Node(node_type: Int, i: int(argv[0].expectInt() / argv[1].expectInt()))
 
 builtinProc begin, 0:
   for arg in argv:
@@ -156,7 +172,7 @@ builtinProc display, 1:
   return argv[0]
 
 builtinProc apply, 2:
-  var (body, sig, env) = argv[0].expectProc()
+  var (sig, body, env) = argv[0].expectProc()
   var params: seq[Node] = argv[1].expectList()
 
   var expected_args: int = len(sig)
@@ -172,6 +188,25 @@ builtinProc apply, 2:
 
   let root = Node(node_type: List, list: body)
   return eval(root, func_scope)
+
+builtinProc `equal?`, 2:
+  return truthy_as_node(argv[0] == argv[1])
+
+
+builtinProc `assert`, 2:
+  if getEnv("mode") == "debug":
+    if not argv[0].truthy():
+      puts(argv[1])
+      quit(70)
+    else:
+      puts(argv[0])
+      puts("is truthy")
+
+
+  return null_node()
+
+builtinProc exit, 1:
+  quit(argv[0].expectInt())
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
@@ -202,6 +237,7 @@ proc parse(tokens: TokenBuffer): Node =
     var nodes: seq[Node] = @[]
     while tokens.hasNextToken():
       if tokens.lookAheadNextToken() == ")":
+        discard tokens.getNextToken()
         break
       nodes.add( parse( tokens ) )
 
@@ -215,6 +251,8 @@ proc parse(tokens: TokenBuffer): Node =
 
 
 proc eval(root: Node, env: Env): Node =
+  puts("Eval")
+  puts(root)
   case root.node_type:
     of Int:
       return root
@@ -239,10 +277,24 @@ proc eval(root: Node, env: Env): Node =
           return eval(root.list[3], env)
         else:
           return null_node()
+      if fname == "quote":
+        return root.list[1]
 
-      # Function Call
+      if fname == "lambda":
+        echo(len(root.list))
+        let args: seq[Node] = expectList( root.list[1] )
+        puts(root.list[0])
+        puts(root.list[1])
+        puts(root.list[2])
+        let body: seq[Node] = expectList( root.list[2] )
+        echo(len(root.list))
+        return Node(node_type: NodeType.Proc, args: args, body: body, env: env)
+
+      puts("function call")
       let functionNode: Node = env[fname]
-      echo(fname)
+      puts(fname)
+      puts("function body")
+      puts(functionNode)
       case functionNode.node_type:
         # TODO: Yell at user - ints and strings arent callable
         of Int:
@@ -250,25 +302,35 @@ proc eval(root: Node, env: Env): Node =
         of String:
           return root
         of List:
-          return apply( @[
-            functionNode,
-            Node(node_type: List, list: root.list[1 .. ^1] )
-          ])
+          return root
         of Builtin:
           echo("Builtin call")
           return functionNode.function(
             root.list[1 .. ^1].map( arg => eval(arg, env) )
           )
         of Proc:
-          return root
+          echo("Function Call")
+          return apply( @[
+            functionNode,
+            Node(node_type: List, list: root.list[1 .. ^1] )
+          ])
 
+proc repl() =
+  var line: string
+  echo "Sequoia"
+  while true:
+    let ok = readLineFromStdin(">>> ", line)
+    if not ok: break # ctrl-C or ctrl-D will cause a break
+    let env: Env = createBaseEnv()
+    if line.len > 0: echo eval(parse(lex(line)), env)
+  echo "exiting"
 
-var line: string
-echo "Sequoia"
-while true:
-  let ok = readLineFromStdin(">>> ", line)
-  if not ok: break # ctrl-C or ctrl-D will cause a break
+proc run() =
   let env: Env = createBaseEnv()
-  if line.len > 0: echo eval(parse(lex(line)), env)
-echo "exiting"
+  echo eval(parse(lex(readAll(stdin))), env)
+
+if isatty(stdin):
+  repl()
+else:
+  run()
 
