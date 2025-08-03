@@ -157,7 +157,6 @@ builtinProc `-`, 2:
 builtinProc `*`, 2:
   Node(node_type: Int, i: argv[0].expectInt() * argv[1].expectInt())
 
-
 # TODO: Add floats
 builtinProc `/`, 2:
   Node(node_type: Int, i: int(argv[0].expectInt() / argv[1].expectInt()))
@@ -188,6 +187,13 @@ builtinProc apply, 2:
 
   let root = Node(node_type: List, list: body)
   return eval(root, func_scope)
+
+builtinProc car, 1:
+  return argv[0].expectList()[0]
+
+builtinProc cdr, 1:
+  Node(node_type: List, list: argv[0].expectList()[1 .. ^1])
+
 
 builtinProc `equal?`, 2:
   return truthy_as_node(argv[0] == argv[1])

@@ -1,6 +1,18 @@
 (begin
-  (+ 1 1)
+  (assert (equals? (+ 1 1) 2))
   (- 2 1)
   (* 1 2)
   (/ 4 2)
+  (assert 
+    (equals?
+      (car (1 2 3))
+      1
+    )
+  )
+  (assert
+    (equals? 
+      (cdr (1 2 3))
+      (2 3)
+    ) 
+  ) 
 )

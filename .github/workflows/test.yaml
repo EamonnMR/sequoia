@@ -16,5 +16,6 @@ jobs:
           make build
       - name: Run test script
         run: |
-          cat test/operators.seq | bin/sequoia
-          cat test/lambda.seq | bin/sequoia
+          for f in test/*; do
+            cat f | bin/sequoia
+          done
