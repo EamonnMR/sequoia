@@ -161,6 +161,18 @@ builtinProc `*`, 2:
 builtinProc `/`, 2:
   Node(node_type: Int, i: int(argv[0].expectInt() / argv[1].expectInt()))
 
+builtinProc `>`, 2:
+  Node(node_type: Int, i: (if argv[0].expectInt() > argv[1].expectInt(): 1 else: 0))
+
+builtinProc `<`, 2:
+  Node(node_type: Int, i: (if argv[0].expectInt() < argv[1].expectInt(): 1 else: 0))
+
+builtinProc `>=`, 2:
+  Node(node_type: Int, i: (if argv[0].expectInt() >= argv[1].expectInt(): 1 else: 0))
+
+builtinProc `<=`, 2:
+  Node(node_type: Int, i: (if argv[0].expectInt() <= argv[1].expectInt(): 1 else: 0))
+
 builtinProc begin, 0:
   for arg in argv:
     echo($(arg))
@@ -213,6 +225,8 @@ builtinProc `assert`, 2:
 
 builtinProc exit, 1:
   quit(argv[0].expectInt())
+
+
 
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
