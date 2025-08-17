@@ -7,6 +7,7 @@ import std/tables
 import std/macros
 import std/envvars
 import std/terminal
+import std/math
 
 proc puts(str: string) =
   if getEnv("mode") == "debug":
@@ -132,7 +133,9 @@ proc `[]`(env: Env, key: string): Node =
 proc `[]=`(env: Env, key: string, value: Node)=
   env.scope[key] = value
 
+# Forward declaration
 proc eval(root: Node, env: Env): Node
+
 
 template builtinProc(name: untyped, expected_args: int, body: untyped): untyped =
   let nameStr: string = astToStr(name).replace("`", "")
@@ -173,6 +176,14 @@ builtinProc `>=`, 2:
 builtinProc `<=`, 2:
   Node(node_type: Int, i: (if argv[0].expectInt() <= argv[1].expectInt(): 1 else: 0))
 
+builtinProc `expt`, 2:
+  Node(node_type: Int, i:
+    argv[0].expectInt() ^ argv[1].expectInt()
+  )
+
+builtinProc `abs`, 1:
+  Node(node_type: Int, i: abs(argv[1].expectInt()))
+
 builtinProc begin, 0:
   for arg in argv:
     echo($(arg))
@@ -183,6 +194,7 @@ builtinProc display, 1:
   return argv[0]
 
 builtinProc apply, 2:
+  # TODO: Properly handle builtin functions here
   var (sig, body, env) = argv[0].expectProc()
   var params: seq[Node] = argv[1].expectList()
 
@@ -200,16 +212,40 @@ builtinProc apply, 2:
   let root = Node(node_type: List, list: body)
   return eval(root, func_scope)
 
+builtinProc map, 2:
+
+  var results: seq[Node] = @[]
+
+  for node in argv[1].expectList():
+    puts(argv[0])
+    puts(node)
+    let result = apply(
+      @[
+        argv[0],
+        Node(node_type: List, list: @[node])
+      ]
+    )
+    puts(result)
+    results.add(result)
+  
+  return Node(node_type: List, list: results)
+ 
+
 builtinProc car, 1:
   return argv[0].expectList()[0]
 
 builtinProc cdr, 1:
-  Node(node_type: List, list: argv[0].expectList()[1 .. ^1])
+  return Node(node_type: List, list: argv[0].expectList()[1 .. ^1])
+
+builtinProc cons, 2:
+  return Node(node_type: List, list: argv[0].expectList() & @[argv[1]])
 
 
 builtinProc `equal?`, 2:
   return truthy_as_node(argv[0] == argv[1])
 
+# builtinProc `=`, 2:
+#   return truthy_as_node(argv[0] == argv[1])
 
 builtinProc `assert`, 2:
   if getEnv("mode") == "debug":
@@ -226,14 +262,12 @@ builtinProc `assert`, 2:
 builtinProc exit, 1:
   quit(argv[0].expectInt())
 
-
-
 proc createTokenBuffer(tokens: sink seq[string]): TokenBuffer =
   return TokenBuffer(position: 0, buffer: tokens)
 
 proc hasNextToken(buffer: TokenBuffer): bool =
   return true
-  result = buffer.buffer.len() < buffer.position
+  #result = buffer.buffer.len() < buffer.position
 
 proc lookAheadNextToken(buffer: TokenBuffer): string =
   return buffer.buffer[buffer.position]
@@ -301,13 +335,11 @@ proc eval(root: Node, env: Env): Node =
         return root.list[1]
 
       if fname == "lambda":
-        echo(len(root.list))
         let args: seq[Node] = expectList( root.list[1] )
         puts(root.list[0])
         puts(root.list[1])
         puts(root.list[2])
         let body: seq[Node] = expectList( root.list[2] )
-        echo(len(root.list))
         return Node(node_type: NodeType.Proc, args: args, body: body, env: env)
 
       puts("function call")
@@ -324,12 +356,12 @@ proc eval(root: Node, env: Env): Node =
         of List:
           return root
         of Builtin:
-          echo("Builtin call")
+          puts("Builtin call")
           return functionNode.function(
             root.list[1 .. ^1].map( arg => eval(arg, env) )
           )
         of Proc:
-          echo("Function Call")
+          puts("Function Call")
           return apply( @[
             functionNode,
             Node(node_type: List, list: root.list[1 .. ^1] )
